@@ -15,6 +15,7 @@ import sys
 import provider
 import importlib
 import shutil
+from tensorboardX import SummaryWriter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -150,10 +151,12 @@ def main(args):
 
     '''TRANING'''
     logger.info('Start training...')
+    writer = SummaryWriter('runs')
     for epoch in range(start_epoch,args.epoch):
         log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
 
         scheduler.step()
+        running_loss = 0.0
         for batch_id, data in tqdm(enumerate(trainDataLoader, 0), total=len(trainDataLoader), smoothing=0.9):
             points, target = data
             points = points.data.numpy()
@@ -176,6 +179,18 @@ def main(args):
             loss.backward()
             optimizer.step()
             global_step += 1
+
+            # print loss statistics
+            running_loss += loss.item()
+            if batch_id % 10 == 9:  # print every 10 batches
+                print('[%d, %5d] loss: %.3f' %
+                      (epoch + 1, batch_id + 1, running_loss / 10))
+                running_loss = 0.0
+                niter = epoch * len(trainDataLoader) + batch_id
+                writer.add_scalar('Train/loss', loss.item(), niter)
+
+        writer.export_scalars_to_json('./log/all_losses.json')
+        writer.close()
 
         train_instance_acc = np.mean(mean_correct)
         log_string('Train Instance Accuracy: %f' % train_instance_acc)
