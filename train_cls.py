@@ -15,7 +15,8 @@ import sys
 import provider
 import importlib
 import shutil
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+# from tensorboardX import SummaryWriter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -27,14 +28,15 @@ def parse_args():
     parser = argparse.ArgumentParser('PointNet')
     parser.add_argument('--batch_size', type=int, default=24, help='batch size in training [default: 24]')
     parser.add_argument('--model', default='pointnet_cls', help='model name [default: pointnet_cls]')
-    parser.add_argument('--epoch',  default=200, type=int, help='number of epoch in training [default: 200]')
+    parser.add_argument('--epoch', default=200, type=int, help='number of epoch in training [default: 200]')
     parser.add_argument('--learning_rate', default=0.001, type=float, help='learning rate in training [default: 0.001]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device [default: 0]')
     parser.add_argument('--num_point', type=int, default=1024, help='Point Number [default: 1024]')
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer for training [default: Adam]')
     parser.add_argument('--log_dir', type=str, default=None, help='experiment root')
     parser.add_argument('--decay_rate', type=float, default=1e-4, help='decay rate [default: 1e-4]')
-    parser.add_argument('--normal', action='store_true', default=False, help='Whether to use normal information [default: False]')
+    parser.add_argument('--normal', action='store_true', default=False,
+                        help='Whether to use normal information [default: False]')
     parser.add_argument('--num_worker', default=4, type=int, help='Number of Dataloader workers [default: 4]')
     parser.add_argument('--num_class', default=40, type=int, help='Number of classes [default: 40]')
     parser.add_argument('--data_dir', type=str, default='data/mnist_point_cloud/', help='Data dir')
@@ -43,7 +45,7 @@ def parse_args():
 
 def test(model, loader, num_class=40):
     mean_correct = []
-    class_acc = np.zeros((num_class,3))
+    class_acc = np.zeros((num_class, 3))
     for j, data in tqdm(enumerate(loader), total=len(loader)):
         points, target = data
         target = target[:, 0]
@@ -53,13 +55,13 @@ def test(model, loader, num_class=40):
         pred, _ = classifier(points)
         pred_choice = pred.data.max(1)[1]
         for cat in np.unique(target.cpu()):
-            classacc = pred_choice[target==cat].eq(target[target==cat].long().data).cpu().sum()
-            class_acc[cat,0]+= classacc.item()/float(points[target==cat].size()[0])
-            class_acc[cat,1]+=1
+            classacc = pred_choice[target == cat].eq(target[target == cat].long().data).cpu().sum()
+            class_acc[cat, 0] += classacc.item() / float(points[target == cat].size()[0])
+            class_acc[cat, 1] += 1
         correct = pred_choice.eq(target.long().data).cpu().sum()
-        mean_correct.append(correct.item()/float(points.size()[0]))
-    class_acc[:,2] =  class_acc[:,0]/ class_acc[:,1]
-    class_acc = np.mean(class_acc[:,2])
+        mean_correct.append(correct.item() / float(points.size()[0]))
+    class_acc[:, 2] = class_acc[:, 0] / class_acc[:, 1]
+    class_acc = np.mean(class_acc[:, 2])
     instance_acc = np.mean(mean_correct)
     return instance_acc, class_acc
 
@@ -106,11 +108,13 @@ def main(args):
     DATA_PATH = args.data_dir
 
     TRAIN_DATASET = ModelNetDataLoader(root=DATA_PATH, npoint=args.num_point, split='train',
-                                                     normal_channel=args.normal)
+                                       normal_channel=args.normal)
     TEST_DATASET = ModelNetDataLoader(root=DATA_PATH, npoint=args.num_point, split='test',
-                                                    normal_channel=args.normal)
-    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=args.num_worker)
-    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=args.num_worker)
+                                      normal_channel=args.normal)
+    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True,
+                                                  num_workers=args.num_worker)
+    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False,
+                                                 num_workers=args.num_worker)
 
     '''MODEL LOADING'''
     num_class = args.num_class
@@ -118,7 +122,7 @@ def main(args):
     shutil.copy('./models/%s.py' % args.model, str(experiment_dir))
     shutil.copy('./models/pointnet_util.py', str(experiment_dir))
 
-    classifier = MODEL.get_model(num_class,normal_channel=args.normal).cuda()
+    classifier = MODEL.get_model(num_class, normal_channel=args.normal).cuda()
     criterion = MODEL.get_loss().cuda()
 
     try:
@@ -129,7 +133,6 @@ def main(args):
     except:
         log_string('No existing model, starting training from scratch...')
         start_epoch = 0
-
 
     if args.optimizer == 'Adam':
         optimizer = torch.optim.Adam(
@@ -151,8 +154,8 @@ def main(args):
 
     '''TRANING'''
     logger.info('Start training...')
-    writer = SummaryWriter('runs')
-    for epoch in range(start_epoch,args.epoch):
+    writer = SummaryWriter('./runs')
+    for epoch in range(start_epoch, args.epoch):
         log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
 
         scheduler.step()
@@ -161,8 +164,8 @@ def main(args):
             points, target = data
             points = points.data.numpy()
             points = provider.random_point_dropout(points)
-            points[:,:, 0:3] = provider.random_scale_point_cloud(points[:,:, 0:3])
-            points[:,:, 0:3] = provider.shift_point_cloud(points[:,:, 0:3])
+            points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
+            points[:, :, 0:3] = provider.shift_point_cloud(points[:, :, 0:3])
             points = torch.Tensor(points)
             target = target[:, 0]
 
@@ -201,13 +204,13 @@ def main(args):
 
             if (class_acc >= best_class_acc):
                 best_class_acc = class_acc
-            log_string('Test Instance Accuracy: %f, Class Accuracy: %f'% (instance_acc, class_acc))
-            log_string('Best Instance Accuracy: %f, Class Accuracy: %f'% (best_instance_acc, best_class_acc))
+            log_string('Test Instance Accuracy: %f, Class Accuracy: %f' % (instance_acc, class_acc))
+            log_string('Best Instance Accuracy: %f, Class Accuracy: %f' % (best_instance_acc, best_class_acc))
 
             if (instance_acc >= best_instance_acc):
                 logger.info('Save model...')
                 savepath = str(checkpoints_dir) + '/best_model.pth'
-                log_string('Saving at %s'% savepath)
+                log_string('Saving at %s' % savepath)
                 state = {
                     'epoch': best_epoch,
                     'instance_acc': instance_acc,
@@ -219,8 +222,9 @@ def main(args):
             global_epoch += 1
 
     logger.info('End of training...')
-    writer.export_scalars_to_json('./log/all_losses.json')
+    # writer.export_scalars_to_json('./log/all_losses.json')
     writer.close()
+
 
 if __name__ == '__main__':
     args = parse_args()
