@@ -189,12 +189,8 @@ def main(args):
                 niter = epoch * len(trainDataLoader) + batch_id
                 writer.add_scalar('Train/loss', loss.item(), niter)
 
-        writer.export_scalars_to_json('./log/all_losses.json')
-        writer.close()
-
         train_instance_acc = np.mean(mean_correct)
         log_string('Train Instance Accuracy: %f' % train_instance_acc)
-
 
         with torch.no_grad():
             instance_acc, class_acc = test(classifier.eval(), testDataLoader, num_class)
@@ -223,6 +219,8 @@ def main(args):
             global_epoch += 1
 
     logger.info('End of training...')
+    writer.export_scalars_to_json('./log/all_losses.json')
+    writer.close()
 
 if __name__ == '__main__':
     args = parse_args()
