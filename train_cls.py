@@ -16,7 +16,6 @@ import provider
 import importlib
 import shutil
 from torch.utils.tensorboard import SummaryWriter
-# from tensorboardX import SummaryWriter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -154,7 +153,10 @@ def main(args):
 
     '''TRANING'''
     logger.info('Start training...')
-    writer = SummaryWriter('./runs')
+    writer_loss = SummaryWriter('./runs')
+    writer_train_instance_accuracy = SummaryWriter('./runs/train_instance')
+    writer_test_instance_accuracy = SummaryWriter('./runs/test_instance')
+    writer_test_class_accuracy = SummaryWriter('./runs/test_class')
     for epoch in range(start_epoch, args.epoch):
         log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
 
@@ -190,13 +192,16 @@ def main(args):
                       (epoch + 1, batch_id + 1, running_loss / 10))
                 running_loss = 0.0
                 niter = epoch * len(trainDataLoader) + batch_id
-                writer.add_scalar('Train/loss', loss.item(), niter)
+                writer_loss.add_scalar('Train/loss', loss.item(), niter)
 
         train_instance_acc = np.mean(mean_correct)
         log_string('Train Instance Accuracy: %f' % train_instance_acc)
+        writer_train_instance_accuracy.add_scalar('Train/instance_accuracy', train_instance_acc.item(), epoch)
 
         with torch.no_grad():
             instance_acc, class_acc = test(classifier.eval(), testDataLoader, num_class)
+            writer_test_instance_accuracy.add_scalar('Test/instance_accuracy', instance_acc.item(), epoch)
+            writer_test_class_accuracy.add_scalar('Test/class_accuracy', class_acc.item(), epoch)
 
             if (instance_acc >= best_instance_acc):
                 best_instance_acc = instance_acc
@@ -222,8 +227,10 @@ def main(args):
             global_epoch += 1
 
     logger.info('End of training...')
-    # writer.export_scalars_to_json('./log/all_losses.json')
-    writer.close()
+    writer_loss.close()
+    writer_train_instance_accuracy.close()
+    writer_test_instance_accuracy.close()
+    writer_test_class_accuracy.close()
 
 
 if __name__ == '__main__':
