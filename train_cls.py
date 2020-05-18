@@ -37,8 +37,8 @@ def parse_args():
     parser.add_argument('--normal', action='store_true', default=False,
                         help='Whether to use normal information [default: False]')
     parser.add_argument('--num_worker', default=4, type=int, help='Number of Dataloader workers [default: 4]')
-    parser.add_argument('--num_class', default=40, type=int, help='Number of classes [default: 40]')
-    parser.add_argument('--data_dir', type=str, default='data/mnist_point_cloud/', help='Data dir')
+    parser.add_argument('--num_class', default=10, type=int, help='Number of classes [default: 40]')
+    parser.add_argument('--data_dir', type=str, default='data/cifar10_point_cloud/', help='Data dir')
     return parser.parse_args()
 
 

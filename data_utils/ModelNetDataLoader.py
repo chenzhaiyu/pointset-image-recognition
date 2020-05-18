@@ -42,7 +42,9 @@ class ModelNetDataLoader(Dataset):
         self.npoints = npoint
         self.uniform = uniform
         # self.catfile = os.path.join(self.root, 'modelnet40_shape_names.txt')
-        self.catfile = os.path.join(self.root, 'mnist_shape_names.txt')
+        # self.catfile = os.path.join(self.root, 'mnist_shape_names.txt')
+        # self.catfile = os.path.join(self.root, 'fashion_mnist_shape_names.txt')
+        self.catfile = os.path.join(self.root, 'cifar10_shape_names.txt')
 
         self.cat = [line.rstrip() for line in open(self.catfile)]
         self.classes = dict(zip(self.cat, range(len(self.cat))))
@@ -51,9 +53,12 @@ class ModelNetDataLoader(Dataset):
         shape_ids = {}
         # shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'modelnet40_train.txt'))]
         # shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'modelnet40_test.txt'))]
-        shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_train.txt'))]
-        shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_test.txt'))]
-
+        # shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_train.txt'))]
+        # shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'fashion_mnist_train.txt'))]
+        shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'cifar10_train.txt'))]
+        # shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_test.txt'))]
+        # shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'fashion_mnist_test.txt'))]
+        shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'cifar10_test.txt'))]
         assert (split == 'train' or split == 'test')
         shape_names = ['_'.join(x.split('_')[0:-1]) for x in shape_ids[split]]
         # list of (shape_name, shape_txt_file_path) tuple
