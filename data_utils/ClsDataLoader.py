@@ -2,16 +2,17 @@ import numpy as np
 import warnings
 import os
 from torch.utils.data import Dataset
-warnings.filterwarnings('ignore')
 
+warnings.filterwarnings('ignore')
 
 
 def pc_normalize(pc):
     centroid = np.mean(pc, axis=0)
     pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
+    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
     pc = pc / m
     return pc
+
 
 def farthest_point_sample(point, npoint):
     """
@@ -22,7 +23,7 @@ def farthest_point_sample(point, npoint):
         centroids: sampled pointcloud index, [npoint, D]
     """
     N, D = point.shape
-    xyz = point[:,:3]
+    xyz = point[:, :3]
     centroids = np.zeros((npoint,))
     distance = np.ones((N,)) * 1e10
     farthest = np.random.randint(0, N)
@@ -36,30 +37,44 @@ def farthest_point_sample(point, npoint):
     point = point[centroids.astype(np.int32)]
     return point
 
-class ModelNetDataLoader(Dataset):
-    def __init__(self, root,  npoint=1024, split='train', uniform=False, normal_channel=True, cache_size=15000):
+
+class ClsDataLoader(Dataset):
+    def __init__(self, root, dataset_name=None, npoint=1024, split='train', uniform=False, normal_channel=True, cache_size=15000):
         self.root = root
         self.npoints = npoint
         self.uniform = uniform
-        # self.catfile = os.path.join(self.root, 'modelnet40_shape_names.txt')
-        self.catfile = os.path.join(self.root, 'mnist_shape_names.txt')
+
+        shape_ids = {}
+        if dataset_name == 'mnist':
+            self.catfile = os.path.join(self.root, 'mnist_shape_names.txt')
+            shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_train.txt'))]
+            shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_test.txt'))]
+        elif dataset_name == 'fashion':
+            self.catfile = os.path.join(self.root, 'fashion_mnist_shape_names.txt')
+            shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'fashion_mnist_train.txt'))]
+            shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'fashion_mnist_test.txt'))]
+        elif dataset_name == 'modelnet':
+            self.catfile = os.path.join(self.root, 'modelnet40_shape_names.txt')
+            shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'modelnet40_train.txt'))]
+            shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'modelnet40_test.txt'))]
+        elif dataset_name == 'cifar':
+            self.catfile = os.path.join(self.root, 'cifar10_shape_names.txt')
+            shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'cifar10_train.txt'))]
+            shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'cifar10_test.txt'))]
+        else:
+            raise NotImplementedError
 
         self.cat = [line.rstrip() for line in open(self.catfile)]
         self.classes = dict(zip(self.cat, range(len(self.cat))))
         self.normal_channel = normal_channel
 
-        shape_ids = {}
-        # shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'modelnet40_train.txt'))]
-        # shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'modelnet40_test.txt'))]
-        shape_ids['train'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_train.txt'))]
-        shape_ids['test'] = [line.rstrip() for line in open(os.path.join(self.root, 'mnist_test.txt'))]
-
         assert (split == 'train' or split == 'test')
         shape_names = ['_'.join(x.split('_')[0:-1]) for x in shape_ids[split]]
+
         # list of (shape_name, shape_txt_file_path) tuple
         self.datapath = [(shape_names[i], os.path.join(self.root, shape_names[i], shape_ids[split][i]) + '.txt') for i
                          in range(len(shape_ids[split]))]
-        print('The size of %s data is %d'%(split,len(self.datapath)))
+        print('The size of %s data is %d' % (split, len(self.datapath)))
 
         self.cache_size = cache_size  # how many data points to cache in memory
         self.cache = {}  # from index to (point_set, cls) tuple
@@ -78,7 +93,7 @@ class ModelNetDataLoader(Dataset):
             if self.uniform:
                 point_set = farthest_point_sample(point_set, self.npoints)
             else:
-                point_set = point_set[0:self.npoints,:]
+                point_set = point_set[0:self.npoints, :]
 
             point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
 
@@ -94,13 +109,11 @@ class ModelNetDataLoader(Dataset):
         return self._get_item(index)
 
 
-
-
 if __name__ == '__main__':
     import torch
 
-    data = ModelNetDataLoader('/data/modelnet40_normal_resampled/',split='train', uniform=False, normal_channel=True,)
+    data = ModelNetDataLoader('/data/modelnet40_normal_resampled/', split='train', uniform=False, normal_channel=True, )
     DataLoader = torch.utils.data.DataLoader(data, batch_size=12, shuffle=True)
-    for point,label in DataLoader:
+    for point, label in DataLoader:
         print(point.shape)
         print(label.shape)

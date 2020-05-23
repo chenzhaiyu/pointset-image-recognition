@@ -2,7 +2,7 @@
 Author: Benny
 Date: Nov 2019
 """
-from data_utils.ModelNetDataLoader import ModelNetDataLoader
+from data_utils.ClsDataLoader import ClsDataLoader
 import argparse
 import numpy as np
 import os
@@ -23,22 +23,24 @@ sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
 
 def parse_args():
-    '''PARAMETERS'''
+    """PARAMETERS"""
     parser = argparse.ArgumentParser('PointNet')
-    parser.add_argument('--batch_size', type=int, default=24, help='batch size in training [default: 24]')
+    parser.add_argument('--batch_size', type=int, default=512, help='batch size in training [default: 512]')
     parser.add_argument('--model', default='pointnet_cls', help='model name [default: pointnet_cls]')
-    parser.add_argument('--epoch', default=200, type=int, help='number of epoch in training [default: 200]')
+    parser.add_argument('--epoch', default=250, type=int, help='number of epoch in training [default: 250]')
     parser.add_argument('--learning_rate', default=0.001, type=float, help='learning rate in training [default: 0.001]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device [default: 0]')
-    parser.add_argument('--num_point', type=int, default=1024, help='Point Number [default: 1024]')
+    parser.add_argument('--num_point', type=int, default=256, help='Point Number [default: 256]')
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer for training [default: Adam]')
     parser.add_argument('--log_dir', type=str, default=None, help='experiment root')
     parser.add_argument('--decay_rate', type=float, default=1e-4, help='decay rate [default: 1e-4]')
     parser.add_argument('--normal', action='store_true', default=False,
                         help='Whether to use normal information [default: False]')
     parser.add_argument('--num_worker', default=4, type=int, help='Number of Dataloader workers [default: 4]')
-    parser.add_argument('--num_class', default=40, type=int, help='Number of classes [default: 40]')
-    parser.add_argument('--data_dir', type=str, default='data/mnist_point_cloud/', help='Data dir')
+    parser.add_argument('--num_class', default=10, type=int, help='Number of classes [default: 10]')
+    parser.add_argument('--dataset_name', default='mnist', type=str, help='Dataset name: mnist, fashion, modelnet, '
+                                                                          'cifar [default: mnist]')
+    parser.add_argument('--data_dir', type=str, default='data/cls/mnist_point_cloud/', help='Data dir')
     return parser.parse_args()
 
 
@@ -77,7 +79,7 @@ def main(args):
     timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))
     experiment_dir = Path('./log/')
     experiment_dir.mkdir(exist_ok=True)
-    experiment_dir = experiment_dir.joinpath('classification')
+    experiment_dir = experiment_dir.joinpath('cls')
     experiment_dir.mkdir(exist_ok=True)
     if args.log_dir is None:
         experiment_dir = experiment_dir.joinpath(timestr)
@@ -106,9 +108,9 @@ def main(args):
     # DATA_PATH = 'data/modelnet40_normal_resampled/'
     DATA_PATH = args.data_dir
 
-    TRAIN_DATASET = ModelNetDataLoader(root=DATA_PATH, npoint=args.num_point, split='train',
+    TRAIN_DATASET = ClsDataLoader(root=DATA_PATH, dataset_name=args.dataset_name, npoint=args.num_point, split='train',
                                        normal_channel=args.normal)
-    TEST_DATASET = ModelNetDataLoader(root=DATA_PATH, npoint=args.num_point, split='test',
+    TEST_DATASET = ClsDataLoader(root=DATA_PATH, dataset_name=args.dataset_name, npoint=args.num_point, split='test',
                                       normal_channel=args.normal)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True,
                                                   num_workers=args.num_worker)
@@ -151,12 +153,12 @@ def main(args):
     best_class_acc = 0.0
     mean_correct = []
 
-    '''TRANING'''
+    '''TRAINING'''
     logger.info('Start training...')
-    writer_loss = SummaryWriter('./runs')
-    writer_train_instance_accuracy = SummaryWriter('./runs/train_instance')
-    writer_test_instance_accuracy = SummaryWriter('./runs/test_instance')
-    writer_test_class_accuracy = SummaryWriter('./runs/test_class')
+    writer_loss = SummaryWriter(os.path.join(str(log_dir), 'loss'))
+    writer_train_instance_accuracy = SummaryWriter(os.path.join(str(log_dir), 'train_instance_accuracy'))
+    writer_test_instance_accuracy = SummaryWriter(os.path.join(str(log_dir), 'test_instance_accuracy'))
+    writer_test_class_accuracy = SummaryWriter(os.path.join(str(log_dir), 'test_class_accuracy'))
     for epoch in range(start_epoch, args.epoch):
         log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
 
@@ -185,11 +187,8 @@ def main(args):
             optimizer.step()
             global_step += 1
 
-            # print loss statistics
             running_loss += loss.item()
             if batch_id % 10 == 9:  # print every 10 batches
-                print('[%d, %5d] loss: %.3f' %
-                      (epoch + 1, batch_id + 1, running_loss / 10))
                 running_loss = 0.0
                 niter = epoch * len(trainDataLoader) + batch_id
                 writer_loss.add_scalar('Train/loss', loss.item(), niter)
@@ -203,16 +202,16 @@ def main(args):
             writer_test_instance_accuracy.add_scalar('Test/instance_accuracy', instance_acc.item(), epoch)
             writer_test_class_accuracy.add_scalar('Test/class_accuracy', class_acc.item(), epoch)
 
-            if (instance_acc >= best_instance_acc):
+            if instance_acc >= best_instance_acc:
                 best_instance_acc = instance_acc
                 best_epoch = epoch + 1
 
-            if (class_acc >= best_class_acc):
+            if class_acc >= best_class_acc:
                 best_class_acc = class_acc
             log_string('Test Instance Accuracy: %f, Class Accuracy: %f' % (instance_acc, class_acc))
             log_string('Best Instance Accuracy: %f, Class Accuracy: %f' % (best_instance_acc, best_class_acc))
 
-            if (instance_acc >= best_instance_acc):
+            if instance_acc >= best_instance_acc:
                 logger.info('Save model...')
                 savepath = str(checkpoints_dir) + '/best_model.pth'
                 log_string('Saving at %s' % savepath)
