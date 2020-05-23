@@ -23,7 +23,7 @@ sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
 # classes = ['ceiling','floor','wall','beam','column','window','door','table','chair','sofa','bookcase','board',
 # 'clutter']
-classes = ['background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
+classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
            'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
@@ -47,10 +47,11 @@ def parse_args():
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
     parser.add_argument('--test_area', type=int, default=2, help='Which area to use for test, option: 1-6 [default: 5]')
     parser.add_argument('--num_worker', default=4, type=int, help='Number of Dataloader workers [default: 4]')
-    parser.add_argument('--num_class', default=21, type=int, help='Number of classes [default: 21]')
+    parser.add_argument('--num_class', default=20, type=int, help='Number of classes [default: 21]')
     # parser.add_argument('--data_dir', type=str,
     # default='/media/zhaiyu/7CF2DC06F2DBC296/Datasets/stanford_indoor3d', help='Data dir')
-    parser.add_argument('--data_dir', type=str, default='data/pascal_point_cloud/', help='Data dir')
+    parser.add_argument('--data_dir', type=str, default='data/semseg/pascal_point_cloud/', help='Data dir')
+    parser.add_argument('--use_all_points', action='store_true', default=False, help='Whether to use all points')
     return parser.parse_args()
 
 
@@ -97,12 +98,12 @@ def main(args):
 
     print("start loading training data ...")
     TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area,
-                                 block_size=1.0, sample_rate=1.0, transform=None, use_block=False,
-                                 num_class=args.num_class)
+                                 block_size=1.0, sample_rate=1.0, transform=None,
+                                 num_class=args.num_class, model=args.model, use_all_points=args.use_all_points)
     print("start loading test data ...")
     TEST_DATASET = S3DISDataset(split='test', data_root=root, num_point=NUM_POINT, test_area=args.test_area,
-                                block_size=1.0, sample_rate=1.0, transform=None, use_block=False,
-                                num_class=args.num_class)
+                                block_size=1.0, sample_rate=1.0, transform=None,
+                                num_class=args.num_class, model=args.model, use_all_points=args.use_all_points)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True,
                                                   num_workers=args.num_worker, pin_memory=True, drop_last=True,
                                                   worker_init_fn=lambda x: np.random.seed(x + int(time.time())))

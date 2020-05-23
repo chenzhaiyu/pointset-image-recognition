@@ -4,12 +4,13 @@ from torch.utils.data import Dataset
 
 
 class S3DISDataset(Dataset):
-    def __init__(self, split='train', data_root='trainval_fullarea', num_point=4096, test_area=5, block_size=1.0, sample_rate=1.0, transform=None, use_block=True, num_class=13):
+    def __init__(self, split='train', data_root='trainval_fullarea', num_point=4096, test_area=5, block_size=1.0, sample_rate=1.0, transform=None, num_class=20, model=None, use_all_points=False):
         super().__init__()
-        self.use_block = use_block
         self.num_point = num_point
         self.block_size = block_size
         self.transform = transform
+        self.model = model
+        self.use_all_points = use_all_points
         rooms = sorted(os.listdir(data_root))
         rooms = [room for room in rooms if 'Area_' in room]
         if split == 'train':
@@ -24,7 +25,7 @@ class S3DISDataset(Dataset):
             room_path = os.path.join(data_root, room_name)
             room_data = np.load(room_path)  # xyzrgbl, N*7
             points, labels = room_data[:, 0:6], room_data[:, 6]  # xyzrgb, N*6; l, N
-            tmp, _ = np.histogram(labels, range(num_class+1))
+            tmp, _ = np.histogram(labels, range(num_class + 1))
             labelweights += tmp
             coord_min, coord_max = np.amin(points, axis=0)[:3], np.amax(points, axis=0)[:3]
             self.room_points.append(points), self.room_labels.append(labels)
@@ -48,12 +49,17 @@ class S3DISDataset(Dataset):
         labels = self.room_labels[room_idx]   # N
         N_points = points.shape[0]
 
-        if self.use_block:
+        if self.use_all_points:
+            center = np.mean(points[:, :3], axis=0)
+            selected_point_idxs = np.arange(N_points)
+
+        else:
             while (True):
                 center = points[np.random.choice(N_points)][:3]
                 block_min = center - [self.block_size / 2.0, self.block_size / 2.0, 0]
                 block_max = center + [self.block_size / 2.0, self.block_size / 2.0, 0]
                 point_idxs = np.where((points[:, 0] >= block_min[0]) & (points[:, 0] <= block_max[0]) & (points[:, 1] >= block_min[1]) & (points[:, 1] <= block_max[1]))[0]
+                # print(point_idxs.size)
                 if point_idxs.size > 1024:
                     break
 
@@ -62,18 +68,12 @@ class S3DISDataset(Dataset):
             else:
                 selected_point_idxs = np.random.choice(point_idxs, self.num_point, replace=True)
 
-        # for pascal dataset; no sampling
-        else:
-            selected_point_idxs = np.arange(N_points)
-            center = np.mean(points[:, :3], axis=0)
         # normalize
-
         selected_points = points[selected_point_idxs, :]  # num_point * 6
-
         current_points = np.zeros((self.num_point, 9))  # num_point * 9
         current_points[:, 6] = selected_points[:, 0] / self.room_coord_max[room_idx][0]
         current_points[:, 7] = selected_points[:, 1] / self.room_coord_max[room_idx][1]
-        current_points[:, 8] = selected_points[:, 2] / (self.room_coord_max[room_idx][2])
+        current_points[:, 8] = selected_points[:, 2] / self.room_coord_max[room_idx][2]
         selected_points[:, 0] = selected_points[:, 0] - center[0]
         selected_points[:, 1] = selected_points[:, 1] - center[1]
         selected_points[:, 3:6] /= 255.0
@@ -81,14 +81,20 @@ class S3DISDataset(Dataset):
         current_labels = labels[selected_point_idxs]
         if self.transform is not None:
             current_points, current_labels = self.transform(current_points, current_labels)
-        return current_points, current_labels
+
+        if self.model == 'pointnet_sem_seg':
+            # print(current_labels)
+            return current_points[:, :6], current_labels
+        else:
+            # for pointnet2
+            return current_points, current_labels
 
     def __len__(self):
         return len(self.room_idxs)
 
 class ScannetDatasetWholeScene():
     # prepare to give prediction on each points
-    def __init__(self, root, block_points=4096, split='test', test_area=5, stride=0.5, block_size=1.0, padding=0.001, num_class=13):
+    def __init__(self, root, block_points=4096, split='test', test_area=5, stride=0.5, block_size=1.0, padding=0.001, num_class=20):
         self.block_points = block_points
         self.block_size = block_size
         self.padding = padding
