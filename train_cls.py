@@ -147,10 +147,24 @@ def main(args):
         optimizer = torch.optim.SGD(classifier.parameters(), lr=0.01, momentum=0.9)
 
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.7)
+
+    try:
+        checkpoint = torch.load(str(experiment_dir) + '/checkpoints/last_model.pth')
+        start_epoch = checkpoint['epoch'] + 1
+        classifier.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        best_instance_acc = checkpoint['instance_acc']
+        best_class_acc = checkpoint['class_acc']
+        log_string('Use pretrain model')
+    except:
+        log_string('No existing model, starting training from scratch...')
+        start_epoch = 0
+        best_instance_acc = 0.0
+        best_class_acc = 0.0
+
     global_epoch = 0
     global_step = 0
-    best_instance_acc = 0.0
-    best_class_acc = 0.0
     mean_correct = []
 
     '''TRAINING'''
@@ -163,6 +177,7 @@ def main(args):
         log_string('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
 
         scheduler.step()
+        log_string('lr: %f' % optimizer.param_groups[0]['lr'])
         running_loss = 0.0
         for batch_id, data in tqdm(enumerate(trainDataLoader, 0), total=len(trainDataLoader), smoothing=0.9):
             points, target = data
@@ -174,6 +189,7 @@ def main(args):
             target = target[:, 0]
 
             points = points.transpose(2, 1)
+
             points, target = points.cuda(), target.cuda()
             optimizer.zero_grad()
 
@@ -189,10 +205,10 @@ def main(args):
 
             running_loss += loss.item()
             if batch_id % 10 == 9:  # print every 10 batches
-                running_loss = 0.0
                 niter = epoch * len(trainDataLoader) + batch_id
                 writer_loss.add_scalar('Train/loss', loss.item(), niter)
 
+        log_string('Loss: %f' % (running_loss/len(trainDataLoader)))
         train_instance_acc = np.mean(mean_correct)
         log_string('Train Instance Accuracy: %f' % train_instance_acc)
         writer_train_instance_accuracy.add_scalar('Train/instance_accuracy', train_instance_acc.item(), epoch)
@@ -211,6 +227,19 @@ def main(args):
             log_string('Test Instance Accuracy: %f, Class Accuracy: %f' % (instance_acc, class_acc))
             log_string('Best Instance Accuracy: %f, Class Accuracy: %f' % (best_instance_acc, best_class_acc))
 
+            logger.info('Save the last model...')
+            savepath_last = str(checkpoints_dir) + '/last_model.pth'
+            log_string('Saving at %s' % savepath_last)
+            state_last = {
+                'epoch': epoch,
+                'instance_acc': instance_acc,
+                'class_acc': class_acc,
+                'model_state_dict': classifier.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+            }
+            torch.save(state_last, savepath_last)
+
             if instance_acc >= best_instance_acc:
                 logger.info('Save model...')
                 savepath = str(checkpoints_dir) + '/best_model.pth'
@@ -221,6 +250,7 @@ def main(args):
                     'class_acc': class_acc,
                     'model_state_dict': classifier.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
                 }
                 torch.save(state, savepath)
             global_epoch += 1

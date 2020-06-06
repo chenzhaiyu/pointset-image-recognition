@@ -16,6 +16,7 @@ from tqdm import tqdm
 import provider
 import numpy as np
 import time
+from torch.utils.tensorboard import SummaryWriter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -164,6 +165,11 @@ def main(args):
     global_epoch = 0
     best_iou = 0
 
+    writer_train_loss = SummaryWriter(os.path.join(str(log_dir), 'train_loss'))
+    writer_train_accuracy = SummaryWriter(os.path.join(str(log_dir), 'train_accuracy'))
+    writer_test_loss = SummaryWriter(os.path.join(str(log_dir), 'test_loss'))
+    writer_test_accuracy = SummaryWriter(os.path.join(str(log_dir), 'test_accuracy'))
+    writer_test_mIoU = SummaryWriter(os.path.join(str(log_dir), 'test_mIoU'))
     for epoch in range(start_epoch, args.epoch):
         '''Train on chopped scenes'''
         log_string('**** Epoch %d (%d/%s) ****' % (global_epoch + 1, epoch + 1, args.epoch))
@@ -201,8 +207,11 @@ def main(args):
             total_correct += correct
             total_seen += (BATCH_SIZE * NUM_POINT)
             loss_sum += loss
+
         log_string('Training mean loss: %f' % (loss_sum / num_batches))
         log_string('Training accuracy: %f' % (total_correct / float(total_seen)))
+        writer_train_loss.add_scalar('Train/loss', loss_sum / num_batches, epoch)
+        writer_train_accuracy.add_scalar('Train/accuracy', total_correct / float(total_seen), epoch)
 
         if epoch % 5 == 0:
             logger.info('Save model...')
@@ -267,6 +276,11 @@ def main(args):
             log_string(iou_per_class_str)
             log_string('Eval mean loss: %f' % (loss_sum / num_batches))
             log_string('Eval accuracy: %f' % (total_correct / float(total_seen)))
+
+            writer_test_loss.add_scalar('Test/loss', loss_sum / num_batches, epoch)
+            writer_test_accuracy.add_scalar('Test/accuracy', total_correct / float(total_seen), epoch)
+            writer_test_mIoU.add_scalar('Test/mIoU', mIoU, epoch)
+
             if mIoU >= best_iou:
                 best_iou = mIoU
                 logger.info('Save model...')
@@ -282,6 +296,13 @@ def main(args):
                 log_string('Saving model....')
             log_string('Best mIoU: %f' % best_iou)
         global_epoch += 1
+
+    writer_train_loss.close()
+    writer_train_accuracy.close()
+    writer_test_loss.close()
+    writer_test_accuracy.close()
+    writer_test_mIoU.close()
+
 
 
 if __name__ == '__main__':
