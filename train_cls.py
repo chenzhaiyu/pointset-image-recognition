@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device [default: 0]')
     parser.add_argument('--num_point', type=int, default=512, help='Point Number [default: 256]')
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer for training [default: Adam]')
-    parser.add_argument('--log_dir', type=str, default=None, help='experiment root')
+    parser.add_argument('--log_dir', type=str, default='pointcnn_cifar', help='experiment root')
     parser.add_argument('--decay_rate', type=float, default=1e-4, help='decay rate [default: 1e-4]')
     parser.add_argument('--normal', action='store_true', default=True,
                         help='Whether to use normal information [default: False]')
@@ -57,6 +57,8 @@ def test(model, loader, num_class=40):
         if args.model == 'pointcnn_cls':
             points = points.transpose(2, 1)
             pos = points.reshape((-1, 6))
+            # normalise rgb
+            pos[:, 3:6] = pos[:, 3:6] / 255.0
             x = np.arange(0, args.batch_size)
             batch = torch.from_numpy(np.repeat(x, args.num_point)).cuda()
             pred, _ = classifier(pos, batch)
@@ -211,6 +213,8 @@ def main(args):
             if args.model == 'pointcnn_cls':
                 points = points.transpose(2, 1)
                 pos = points.reshape((-1, 6))
+                # normalise rgb
+                pos[:, 3:6] = pos[:, 3:6] / 255.0
                 x = np.arange(0, args.batch_size)
                 batch = torch.from_numpy(np.repeat(x, args.num_point)).cuda()
                 pred, trans_feat = classifier(pos, batch)
