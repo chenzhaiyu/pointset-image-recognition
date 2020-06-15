@@ -3,6 +3,7 @@ Author: Benny
 Date: Nov 2019
 """
 from data_utils.ClsDataLoader import ClsDataLoader
+from data_utils.PyGDataloader import DataLoader as PyGDataloader
 import argparse
 import numpy as np
 import os
@@ -25,22 +26,22 @@ sys.path.append(os.path.join(ROOT_DIR, 'models'))
 def parse_args():
     """PARAMETERS"""
     parser = argparse.ArgumentParser('PointNet')
-    parser.add_argument('--batch_size', type=int, default=512, help='batch size in training [default: 512]')
-    parser.add_argument('--model', default='pointnet_cls', help='model name [default: pointnet_cls]')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size in training [default: 512]')
+    parser.add_argument('--model', default='pointcnn_cls', help='model name [default: pointnet_cls]')
     parser.add_argument('--epoch', default=250, type=int, help='number of epoch in training [default: 250]')
     parser.add_argument('--learning_rate', default=0.001, type=float, help='learning rate in training [default: 0.001]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device [default: 0]')
-    parser.add_argument('--num_point', type=int, default=256, help='Point Number [default: 256]')
+    parser.add_argument('--num_point', type=int, default=512, help='Point Number [default: 256]')
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer for training [default: Adam]')
-    parser.add_argument('--log_dir', type=str, default=None, help='experiment root')
+    parser.add_argument('--log_dir', type=str, default='pointcnn_cifar', help='experiment root')
     parser.add_argument('--decay_rate', type=float, default=1e-4, help='decay rate [default: 1e-4]')
-    parser.add_argument('--normal', action='store_true', default=False,
+    parser.add_argument('--normal', action='store_true', default=True,
                         help='Whether to use normal information [default: False]')
     parser.add_argument('--num_worker', default=4, type=int, help='Number of Dataloader workers [default: 4]')
     parser.add_argument('--num_class', default=10, type=int, help='Number of classes [default: 10]')
-    parser.add_argument('--dataset_name', default='mnist', type=str, help='Dataset name: mnist, fashion, modelnet, '
-                                                                          'cifar [default: mnist]')
-    parser.add_argument('--data_dir', type=str, default='data/cls/mnist_point_cloud/', help='Data dir')
+    parser.add_argument('--dataset_name', default='cifar', type=str, help='Dataset name: mnist, fashion, modelnet, '
+                                                                            'cifar [default: mnist]')
+    parser.add_argument('--data_dir', type=str, default='data/cls/cifar10_point_cloud/', help='Data dir')
     return parser.parse_args()
 
 
@@ -53,7 +54,16 @@ def test(model, loader, num_class=40):
         points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
         classifier = model.eval()
-        pred, _ = classifier(points)
+        if args.model == 'pointcnn_cls':
+            points = points.transpose(2, 1)
+            pos = points.reshape((-1, 6))
+            # normalise rgb
+            pos[:, 3:6] = pos[:, 3:6] / 255.0
+            x = np.arange(0, args.batch_size)
+            batch = torch.from_numpy(np.repeat(x, args.num_point)).cuda()
+            pred, _ = classifier(pos, batch)
+        else:
+            pred, _ = classifier(points)
         pred_choice = pred.data.max(1)[1]
         for cat in np.unique(target.cpu()):
             classacc = pred_choice[target == cat].eq(target[target == cat].long().data).cpu().sum()
@@ -108,14 +118,20 @@ def main(args):
     # DATA_PATH = 'data/modelnet40_normal_resampled/'
     DATA_PATH = args.data_dir
 
-    TRAIN_DATASET = ClsDataLoader(root=DATA_PATH, dataset_name=args.dataset_name, npoint=args.num_point, split='train',
-                                       normal_channel=args.normal)
-    TEST_DATASET = ClsDataLoader(root=DATA_PATH, dataset_name=args.dataset_name, npoint=args.num_point, split='test',
-                                      normal_channel=args.normal)
+    # if args.model == 'pointcnn_cls':
+    #     trainDataLoader = PyGDataloader(TRAIN_DATASET, args.batch_size, shuffle=True)
+    #     testDataLoader = PyGDataloader(TEST_DATASET, args.batch_size, shuffle=False)
+    # else:
+    TRAIN_DATASET = ClsDataLoader(root=DATA_PATH, dataset_name=args.dataset_name, npoint=args.num_point,
+                                  split='train',
+                                  normal_channel=args.normal)
+    TEST_DATASET = ClsDataLoader(root=DATA_PATH, dataset_name=args.dataset_name, npoint=args.num_point,
+                                 split='test',
+                                 normal_channel=args.normal)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True,
-                                                  num_workers=args.num_worker)
+                                                  num_workers=args.num_worker, drop_last=True)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False,
-                                                 num_workers=args.num_worker)
+                                                 num_workers=args.num_worker, drop_last=True)
 
     '''MODEL LOADING'''
     num_class = args.num_class
@@ -194,7 +210,17 @@ def main(args):
             optimizer.zero_grad()
 
             classifier = classifier.train()
-            pred, trans_feat = classifier(points)
+            if args.model == 'pointcnn_cls':
+                points = points.transpose(2, 1)
+                pos = points.reshape((-1, 6))
+                # normalise rgb
+                pos[:, 3:6] = pos[:, 3:6] / 255.0
+                x = np.arange(0, args.batch_size)
+                batch = torch.from_numpy(np.repeat(x, args.num_point)).cuda()
+                pred, trans_feat = classifier(pos, batch)
+            else:
+                pred, trans_feat = classifier(points)
+
             loss = criterion(pred, target.long(), trans_feat)
             pred_choice = pred.data.max(1)[1]
             correct = pred_choice.eq(target.long().data).cpu().sum()
@@ -208,7 +234,7 @@ def main(args):
                 niter = epoch * len(trainDataLoader) + batch_id
                 writer_loss.add_scalar('Train/loss', loss.item(), niter)
 
-        log_string('Loss: %f' % (running_loss/len(trainDataLoader)))
+        log_string('Loss: %f' % (running_loss / len(trainDataLoader)))
         train_instance_acc = np.mean(mean_correct)
         log_string('Train Instance Accuracy: %f' % train_instance_acc)
         writer_train_instance_accuracy.add_scalar('Train/instance_accuracy', train_instance_acc.item(), epoch)
