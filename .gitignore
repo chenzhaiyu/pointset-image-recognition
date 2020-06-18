@@ -129,10 +129,14 @@ dmypy.json
 .pyre/
 
 # data
-/data
+data
 
 # logs
 /log
 
 # pycharm
 .idea
+
+# trained models
+*.pth
+*.pth.tar
