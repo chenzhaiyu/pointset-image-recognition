@@ -7,14 +7,18 @@ from torch_geometric.nn import XConv, fps, global_mean_pool
 class get_model(torch.nn.Module):
     def __init__(self, num_classes, normal_channel=True):
         super(get_model, self).__init__()
+        if normal_channel:
+            dim = 6
+        else:
+            dim = 3
 
-        self.conv1 = XConv(0, 48, dim=6, kernel_size=8, hidden_channels=32)
+        self.conv1 = XConv(0, 48, dim=dim, kernel_size=8, hidden_channels=32)
         self.conv2 = XConv(
-            48, 96, dim=6, kernel_size=12, hidden_channels=64, dilation=2)
+            48, 96, dim=dim, kernel_size=12, hidden_channels=64, dilation=2)
         self.conv3 = XConv(
-            96, 192, dim=6, kernel_size=16, hidden_channels=128, dilation=2)
+            96, 192, dim=dim, kernel_size=16, hidden_channels=128, dilation=2)
         self.conv4 = XConv(
-            192, 384, dim=6, kernel_size=16, hidden_channels=256, dilation=2)
+            192, 384, dim=dim, kernel_size=16, hidden_channels=256, dilation=2)
 
         self.lin1 = Lin(384, 256)
         self.lin2 = Lin(256, 128)

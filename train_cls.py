@@ -26,22 +26,22 @@ sys.path.append(os.path.join(ROOT_DIR, 'models'))
 def parse_args():
     """PARAMETERS"""
     parser = argparse.ArgumentParser('PointNet')
-    parser.add_argument('--batch_size', type=int, default=32, help='batch size in training [default: 512]')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch size in training [default: 512]')
     parser.add_argument('--model', default='pointcnn_cls', help='model name [default: pointnet_cls]')
     parser.add_argument('--epoch', default=250, type=int, help='number of epoch in training [default: 250]')
     parser.add_argument('--learning_rate', default=0.001, type=float, help='learning rate in training [default: 0.001]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device [default: 0]')
-    parser.add_argument('--num_point', type=int, default=512, help='Point Number [default: 256]')
+    parser.add_argument('--num_point', type=int, default=256, help='Point Number [default: 256]')
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer for training [default: Adam]')
-    parser.add_argument('--log_dir', type=str, default='pointcnn_cifar', help='experiment root')
+    parser.add_argument('--log_dir', type=str, default='pointcnn_mnist', help='experiment root')
     parser.add_argument('--decay_rate', type=float, default=1e-4, help='decay rate [default: 1e-4]')
-    parser.add_argument('--normal', action='store_true', default=True,
+    parser.add_argument('--normal', action='store_true', default=False,
                         help='Whether to use normal information [default: False]')
     parser.add_argument('--num_worker', default=4, type=int, help='Number of Dataloader workers [default: 4]')
     parser.add_argument('--num_class', default=10, type=int, help='Number of classes [default: 10]')
-    parser.add_argument('--dataset_name', default='cifar', type=str, help='Dataset name: mnist, fashion, modelnet, '
+    parser.add_argument('--dataset_name', default='mnist', type=str, help='Dataset name: mnist, fashion, modelnet, '
                                                                             'cifar [default: mnist]')
-    parser.add_argument('--data_dir', type=str, default='data/cls/cifar10_point_cloud/', help='Data dir')
+    parser.add_argument('--data_dir', type=str, default='data/cls/mnist_point_cloud/', help='Data dir')
     return parser.parse_args()
 
 
@@ -56,9 +56,12 @@ def test(model, loader, num_class=40):
         classifier = model.eval()
         if args.model == 'pointcnn_cls':
             points = points.transpose(2, 1)
-            pos = points.reshape((-1, 6))
-            # normalise rgb
-            pos[:, 3:6] = pos[:, 3:6] / 255.0
+            if args.dataset_name == 'cifar':
+                pos = points.reshape((-1, 6))
+                # normalise rgb
+                pos[:, 3:6] = pos[:, 3:6] / 255.0
+            else:
+                pos = points.reshape((-1, 3))
             x = np.arange(0, args.batch_size)
             batch = torch.from_numpy(np.repeat(x, args.num_point)).cuda()
             pred, _ = classifier(pos, batch)
@@ -167,6 +170,7 @@ def main(args):
     try:
         checkpoint = torch.load(str(experiment_dir) + '/checkpoints/last_model.pth')
         start_epoch = checkpoint['epoch'] + 1
+        # todo: duplicate loading
         classifier.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -212,9 +216,12 @@ def main(args):
             classifier = classifier.train()
             if args.model == 'pointcnn_cls':
                 points = points.transpose(2, 1)
-                pos = points.reshape((-1, 6))
-                # normalise rgb
-                pos[:, 3:6] = pos[:, 3:6] / 255.0
+                if args.dataset_name == 'cifar':
+                    pos = points.reshape((-1, 6))
+                    # normalise rgb
+                    pos[:, 3:6] = pos[:, 3:6] / 255.0
+                else:
+                    pos = points.reshape((-1, 3))
                 x = np.arange(0, args.batch_size)
                 batch = torch.from_numpy(np.repeat(x, args.num_point)).cuda()
                 pred, trans_feat = classifier(pos, batch)
