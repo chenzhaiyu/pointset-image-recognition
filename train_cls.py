@@ -42,6 +42,7 @@ def parse_args():
     parser.add_argument('--dataset_name', default='mnist', type=str, help='Dataset name: mnist, fashion, modelnet, '
                                                                             'cifar [default: mnist]')
     parser.add_argument('--data_dir', type=str, default='data/cls/mnist_point_cloud/', help='Data dir')
+    parser.add_argument('--pointcnn_data_aug', default=False, help='Whether to use data augmentation for PointCNN')
     return parser.parse_args()
 
 
@@ -145,14 +146,14 @@ def main(args):
     classifier = MODEL.get_model(num_class, normal_channel=args.normal).cuda()
     criterion = MODEL.get_loss().cuda()
 
-    try:
-        checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model.pth')
-        start_epoch = checkpoint['epoch']
-        classifier.load_state_dict(checkpoint['model_state_dict'])
-        log_string('Use pretrain model')
-    except:
-        log_string('No existing model, starting training from scratch...')
-        start_epoch = 0
+    # try:
+    #     checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model.pth')
+    #     start_epoch = checkpoint['epoch']
+    #     classifier.load_state_dict(checkpoint['model_state_dict'])
+    #     log_string('Use pretrain model')
+    # except:
+    #     log_string('No existing model, starting training from scratch...')
+    #     start_epoch = 0
 
     if args.optimizer == 'Adam':
         optimizer = torch.optim.Adam(
@@ -170,7 +171,6 @@ def main(args):
     try:
         checkpoint = torch.load(str(experiment_dir) + '/checkpoints/last_model.pth')
         start_epoch = checkpoint['epoch'] + 1
-        # todo: duplicate loading
         classifier.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -205,6 +205,9 @@ def main(args):
             points = provider.random_point_dropout(points)
             points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
             points[:, :, 0:3] = provider.shift_point_cloud(points[:, :, 0:3])
+            if args.model=='pointcnn_cls' and args.pointcnn_data_aug == True:
+                points[:, :, 0:3] = provider.rotate_point_cloud(points[:, :, 0:3])
+                points[:, :, 0:3] = provider.jitter_point_cloud(points[:, :, 0:3])
             points = torch.Tensor(points)
             target = target[:, 0]
 
