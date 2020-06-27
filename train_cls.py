@@ -206,6 +206,7 @@ def main(args):
             points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
             points[:, :, 0:3] = provider.shift_point_cloud(points[:, :, 0:3])
             if args.model=='pointcnn_cls' and args.pointcnn_data_aug == True:
+                points = provider.shuffle_points(points)
                 points[:, :, 0:3] = provider.rotate_point_cloud(points[:, :, 0:3])
                 points[:, :, 0:3] = provider.jitter_point_cloud(points[:, :, 0:3])
             points = torch.Tensor(points)
