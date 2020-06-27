@@ -1,0 +1,3 @@
+# for shift-invariance-exp only
+*.pth
+translation_samples
