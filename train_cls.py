@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument('--dataset_name', default='mnist', type=str, help='Dataset name: mnist, fashion, modelnet, '
                                                                             'cifar [default: mnist]')
     parser.add_argument('--data_dir', type=str, default='data/cls/mnist_point_cloud/', help='Data dir')
-    parser.add_argument('--pointcnn_data_aug', default=False, help='Whether to use data augmentation for PointCNN')
+    parser.add_argument('--pointcnn_data_aug', action='store_true', default=False, help='Whether to use data augmentation for PointCNN')
     return parser.parse_args()
 
 
