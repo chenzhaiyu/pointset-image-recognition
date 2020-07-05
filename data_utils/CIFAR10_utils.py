@@ -9,7 +9,7 @@ import pickle
 from data_utils import grabcut
 
 
-def write_train_data(cifar_folder, out_folder):
+def write_train_data(cifar_folder, out_folder, num_sample):
     labels = []
     images = []
     filenames = []
@@ -34,33 +34,40 @@ def write_train_data(cifar_folder, out_folder):
                 image[:, :, 0] = images[i, indices[j], 0:32 * 32].reshape((32, 32))
                 image[:, :, 1] = images[i, indices[j], 32 * 32:32 * 32 * 2].reshape((32, 32))
                 image[:, :, 2] = images[i, indices[j], 32 * 32 * 2:32 * 32 * 3].reshape((32, 32))
-                # test = grabcut.grabcut(image, x0=0, y0=0, w=31, h=31)
-                # print("class: {}".format(object_class))
-                # continue
-                pc = []
-                for r in range(32):
-                    for c in range(32):
-                        pc.append([c, r, 1.0, image[r, c, 0], image[r, c, 1], image[r, c, 2]])  # x y z r g b
+                foreground = grabcut.grabcut(image, x0=0, y0=0, w=31, h=31)
 
-                # randomly choose 512 points
-                pc = random.sample(pc, 512)
+                if np.count_nonzero(foreground) / (32 * 32) > 0.1:  # ensure there are enough foreground points
+                    pc = []
+                    for r in range(32):
+                        for c in range(32):
+                            if foreground[r, c, 0] != 0 and foreground[r, c, 1] != 0 and foreground[r, c, 2] != 0:
+                                pc.append([c, r, 1.0, image[r, c, 0], image[r, c, 1], image[r, c, 2]])  # x y z r g b
 
-                # write one image into one file
-                filename = filenames[i, indices[j]].split('_')
-                file_ext = filename[-1].split('.')
-                filename = np.concatenate((filename[0:-1], file_ext))
-                name = filename[0]
-                for k in filename[1:]:
-                    name += k
-                with open(out_folder + '/{}/{}_{}train.txt'.format(object_class, object_class, name), 'w') as o:
-                    for pt in pc:
-                        # x, y, z and r, g, b
-                        string = "{:.6f},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}".format(pt[0], pt[1], pt[2], pt[3], pt[4], pt[5])
-                        o.write(string + "\n")
-                o.close()
+                    # randomly choose 256 points
+                    pc_len = len(pc)
+                    if pc_len >= num_sample:
+                        pc = random.sample(pc, num_sample)
+                    else:
+                        last_p = pc[-1]
+                        for p in range(num_sample - pc_len):
+                            pc.append(last_p)
+
+                    # write one image into one file
+                    filename = filenames[i, indices[j]].split('_')
+                    file_ext = filename[-1].split('.')
+                    filename = np.concatenate((filename[0:-1], file_ext))
+                    name = filename[0]
+                    for k in filename[1:]:
+                        name += k
+                    with open(out_folder + '/{}/{}_{}train.txt'.format(object_class, object_class, name), 'w') as o:
+                        for pt in pc:
+                            # x, y, z and r, g, b
+                            string = "{:.6f},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}".format(pt[0], pt[1], pt[2], pt[3], pt[4], pt[5])
+                            o.write(string + "\n")
+                    o.close()
 
 
-def write_test_data(cifar_folder, out_folder):
+def write_test_data(cifar_folder, out_folder, num_sample):
     labels = []
     images = []
     filenames = []
@@ -84,27 +91,37 @@ def write_test_data(cifar_folder, out_folder):
             image[:, :, 0] = images[0, indices[j], 0:32 * 32].reshape((32, 32))
             image[:, :, 1] = images[0, indices[j], 32 * 32:32 * 32 * 2].reshape((32, 32))
             image[:, :, 2] = images[0, indices[j], 32 * 32 * 2:32 * 32 * 3].reshape((32, 32))
-            pc = []
-            for r in range(32):
-                for c in range(32):
-                    pc.append([c, r, 1.0, image[r, c, 0], image[r, c, 1], image[r, c, 2]])  # x y z r g b
+            foreground = grabcut.grabcut(image, x0=0, y0=0, w=31, h=31)
 
-            # randomly choose 512 points
-            pc = random.sample(pc, 512)
+            if np.count_nonzero(foreground) / (32 * 32) > 0.1:  # ensure there are enough foreground points
+                pc = []
+                for r in range(32):
+                    for c in range(32):
+                        if foreground[r, c, 0] != 0 and foreground[r, c, 1] != 0 and foreground[r, c, 2] != 0:
+                            pc.append([c, r, 1.0, image[r, c, 0], image[r, c, 1], image[r, c, 2]])  # x y z r g b
 
-            # write one image into one file
-            filename = filenames[0, indices[j]].split('_')
-            file_ext = filename[-1].split('.')
-            filename = np.concatenate((filename[0:-1], file_ext))
-            name = filename[0]
-            for k in filename[1:]:
-                name += k
-            with open(out_folder + '/{}/{}_{}test.txt'.format(object_class, object_class, name), 'w') as o:
-                for pt in pc:
-                    # x, y, z and r, g, b
-                    string = "{:.6f},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}".format(pt[0], pt[1], pt[2], pt[3], pt[4], pt[5])
-                    o.write(string + "\n")
-            o.close()
+                # randomly choose 256 points
+                pc_len = len(pc)
+                if pc_len >= num_sample:
+                    pc = random.sample(pc, num_sample)
+                else:
+                    last_p = pc[-1]
+                    for p in range(num_sample - pc_len):
+                        pc.append(last_p)
+
+                # write one image into one file
+                filename = filenames[0, indices[j]].split('_')
+                file_ext = filename[-1].split('.')
+                filename = np.concatenate((filename[0:-1], file_ext))
+                name = filename[0]
+                for k in filename[1:]:
+                    name += k
+                with open(out_folder + '/{}/{}_{}test.txt'.format(object_class, object_class, name), 'w') as o:
+                    for pt in pc:
+                        # x, y, z and r, g, b
+                        string = "{:.6f},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}".format(pt[0], pt[1], pt[2], pt[3], pt[4], pt[5])
+                        o.write(string + "\n")
+                o.close()
 
 
 def write_file_name(folder, out_file, keyword):
@@ -124,8 +141,12 @@ if __name__ == '__main__':
     for i in range(10):
         os.makedirs("D:/Documents/Datasets/cifar-10-batches-py/point_cloud/{}".format(i))
 
-    write_train_data("D:/Documents/Datasets/cifar-10-batches-py/", "D:/Documents/Datasets/cifar-10-batches-py/point_cloud/")
-    write_test_data("D:/Documents/Datasets/cifar-10-batches-py/", "D:/Documents/Datasets/cifar-10-batches-py/point_cloud/")
+    write_train_data("D:/Documents/Datasets/cifar-10-batches-py/",
+                     "D:/Documents/Datasets/cifar-10-batches-py/point_cloud/",
+                     256)
+    write_test_data("D:/Documents/Datasets/cifar-10-batches-py/",
+                    "D:/Documents/Datasets/cifar-10-batches-py/point_cloud/",
+                    256)
 
     write_file_name("D:/Documents/Datasets/cifar-10-batches-py/point_cloud/",
                     "D:/Documents/Datasets/cifar-10-batches-py/point_cloud/cifar10_train.txt",
